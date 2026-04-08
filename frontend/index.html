@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS Student Tracker</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>AWS Student Tracker</h1>
+      <p>Students, programs, courses, and grades.</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>API Configuration</h2>
+        <label for="apiBaseUrl">API Base URL</label>
+        <input id="apiBaseUrl" placeholder="https://abc.execute-api.us-east-1.amazonaws.com/prod" />
+        <button id="saveConfigBtn">Save Base URL</button>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Create Student</h2>
+          <form id="studentForm">
+            <input name="studentId" placeholder="Student ID (optional)" />
+            <input name="name" placeholder="Name" required />
+            <input name="email" type="email" placeholder="Email" required />
+            <button type="submit">Queue Student Create</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Create Program</h2>
+          <form id="programForm">
+            <input name="programId" placeholder="Program ID (optional)" />
+            <input name="name" placeholder="Program Name" required />
+            <input name="department" placeholder="Department" required />
+            <button type="submit">Queue Program Create</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Create Course</h2>
+          <form id="courseForm">
+            <input name="courseId" placeholder="Course ID (optional)" />
+            <input name="title" placeholder="Course Title" required />
+            <input name="programId" placeholder="Program ID" required />
+            <button type="submit">Queue Course Create</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Assign Grade</h2>
+          <form id="gradeForm">
+            <input name="gradeId" placeholder="Grade ID (optional)" />
+            <input name="studentId" placeholder="Student ID" required />
+            <input name="courseId" placeholder="Course ID" required />
+            <input name="grade" placeholder="Grade (A-F)" required />
+            <button type="submit">Queue Grade Assignment</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>Reads</h2>
+        <div class="actions">
+          <button data-read="students">List Students</button>
+          <button data-read="programs">List Programs</button>
+          <button data-read="courses">List Courses</button>
+          <button data-read="grades">List Grades</button>
+        </div>
+        <pre id="output">Click a read button to load data.</pre>
+      </section>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
