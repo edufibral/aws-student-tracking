@@ -40,30 +40,6 @@ locals {
       handler  = "write-worker.handler"
     }
   }
-
-  entity_routes = {
-    students = "/students"
-    programs = "/programs"
-    courses  = "/courses"
-    grades   = "/grades"
-  }
-
-  collection_methods = toset(["GET", "POST", "OPTIONS"])
-  item_methods       = toset(["GET", "PUT", "DELETE", "OPTIONS"])
-
-  collection_route_map = merge([
-    for entity, path in local.entity_routes : {
-      for method in local.collection_methods : "${method} ${path}" => entity
-    }
-  ]...)
-
-  item_route_map = merge([
-    for entity, path in local.entity_routes : {
-      for method in local.item_methods : "${method} ${path}/{id}" => entity
-    }
-  ]...)
-
-  route_map = merge(local.collection_route_map, local.item_route_map)
 }
 
 resource "aws_dynamodb_table" "student_tracker" {
@@ -206,10 +182,9 @@ resource "aws_lambda_event_source_mapping" "write_events" {
 resource "aws_apigatewayv2_api" "http_api" {
   name          = "${var.project_name}-http-api"
   protocol_type = "HTTP"
-
   cors_configuration {
-    allow_headers = ["*"]
-    allow_methods = ["*"]
+    allow_headers = ["content-type"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_origins = ["*"]
   }
 }
@@ -227,6 +202,19 @@ resource "aws_apigatewayv2_integration" "lambda" {
   integration_method     = "POST"
   integration_uri        = each.value
   payload_format_version = "1.0"
+}
+
+locals {
+  route_map = {
+    "ANY /students"       = "students"
+    "ANY /students/{id}"  = "students"
+    "ANY /programs"       = "programs"
+    "ANY /programs/{id}"  = "programs"
+    "ANY /courses"        = "courses"
+    "ANY /courses/{id}"   = "courses"
+    "ANY /grades"         = "grades"
+    "ANY /grades/{id}"    = "grades"
+  }
 }
 
 resource "aws_apigatewayv2_route" "routes" {

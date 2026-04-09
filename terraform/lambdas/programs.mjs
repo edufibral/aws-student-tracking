@@ -13,27 +13,8 @@ const sqs = new SQSClient({});
 const TABLE_NAME = process.env.TABLE_NAME;
 const WRITE_QUEUE_URL = process.env.WRITE_QUEUE_URL;
 
-const corsHeaders = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': '*'
-};
-
 const getMethod = (event) => event.httpMethod || event.requestContext?.http?.method;
-
-const getPath = (event) => {
-  const rawPath = event.path || event.requestContext?.http?.path || '';
-  return rawPath.replace(/^\/programs\/[^/]+$/, '/programs/{id}');
-};
-
-const getRouteKey = (event) => {
-  if (event.routeKey && event.routeKey !== '$default') {
-    return event.routeKey;
-  }
-
-  return `${getMethod(event)} ${getPath(event)}`;
-};
+const getPath = (event) => event.resource || event.requestContext?.http?.path || event.path;
 
 const parseBody = (event) => {
   try {
@@ -43,9 +24,9 @@ const parseBody = (event) => {
   }
 };
 
-const json = (statusCode, body = {}) => ({
+const json = (statusCode, body) => ({
   statusCode,
-  headers: corsHeaders,
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body)
 });
 
@@ -57,8 +38,6 @@ const queueWrite = async (eventType, payload) => {
     })
   );
 };
-
-const preflight = async () => json(204);
 
 const createProgram = async (event) => {
   const body = parseBody(event);
@@ -124,8 +103,6 @@ const deleteProgram = async (event) => {
 };
 
 const routes = {
-  'OPTIONS /programs': preflight,
-  'OPTIONS /programs/{id}': preflight,
   'POST /programs': createProgram,
   'GET /programs': listPrograms,
   'GET /programs/{id}': getProgram,
@@ -134,7 +111,9 @@ const routes = {
 };
 
 export const handler = async (event) => {
-  const routeKey = getRouteKey(event);
+  const method = getMethod(event);
+  const path = getPath(event);
+  const routeKey = `${method} ${path}`;
   const route = routes[routeKey];
 
   if (!route) return json(404, { message: 'Route not found', routeKey });

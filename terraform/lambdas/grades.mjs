@@ -13,6 +13,7 @@ const sqs = new SQSClient({});
 const TABLE_NAME = process.env.TABLE_NAME;
 const WRITE_QUEUE_URL = process.env.WRITE_QUEUE_URL;
 
+<<<<<<< codex/create-frontend-and-terraform-scripts-for-aws-project-881i5b
 const corsHeaders = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -34,6 +35,10 @@ const getRouteKey = (event) => {
 
   return `${getMethod(event)} ${getPath(event)}`;
 };
+=======
+const getMethod = (event) => event.httpMethod || event.requestContext?.http?.method;
+const getPath = (event) => event.resource || event.requestContext?.http?.path || event.path;
+>>>>>>> main
 
 const parseBody = (event) => {
   try {
@@ -43,9 +48,15 @@ const parseBody = (event) => {
   }
 };
 
+<<<<<<< codex/create-frontend-and-terraform-scripts-for-aws-project-881i5b
 const json = (statusCode, body = {}) => ({
   statusCode,
   headers: corsHeaders,
+=======
+const json = (statusCode, body) => ({
+  statusCode,
+  headers: { 'Content-Type': 'application/json' },
+>>>>>>> main
   body: JSON.stringify(body)
 });
 
@@ -58,8 +69,11 @@ const queueWrite = async (eventType, payload) => {
   );
 };
 
+<<<<<<< codex/create-frontend-and-terraform-scripts-for-aws-project-881i5b
 const preflight = async () => json(204);
 
+=======
+>>>>>>> main
 const assignGrade = async (event) => {
   const body = parseBody(event);
 
@@ -126,8 +140,11 @@ const deleteGrade = async (event) => {
 };
 
 const routes = {
+<<<<<<< codex/create-frontend-and-terraform-scripts-for-aws-project-881i5b
   'OPTIONS /grades': preflight,
   'OPTIONS /grades/{id}': preflight,
+=======
+>>>>>>> main
   'POST /grades': assignGrade,
   'GET /grades': listGrades,
   'GET /grades/{id}': getGrade,
@@ -136,7 +153,13 @@ const routes = {
 };
 
 export const handler = async (event) => {
+<<<<<<< codex/create-frontend-and-terraform-scripts-for-aws-project-881i5b
   const routeKey = getRouteKey(event);
+=======
+  const method = getMethod(event);
+  const path = getPath(event);
+  const routeKey = `${method} ${path}`;
+>>>>>>> main
   const route = routes[routeKey];
 
   if (!route) return json(404, { message: 'Route not found', routeKey });
