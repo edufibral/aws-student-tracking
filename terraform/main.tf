@@ -17,8 +17,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_region" "current" {}
-
 locals {
   lambdas = {
     students = {
@@ -42,36 +40,6 @@ locals {
       handler  = "write-worker.handler"
     }
   }
-
-  entity_paths = {
-    students = "students"
-    programs = "programs"
-    courses  = "courses"
-    grades   = "grades"
-  }
-
-  collection_methods = toset(["GET", "POST", "OPTIONS"])
-  item_methods       = toset(["GET", "PUT", "DELETE", "OPTIONS"])
-
-  collection_method_map = merge([
-    for entity, path_part in local.entity_paths : {
-      for method in local.collection_methods : "${entity}:${method}" => {
-        entity    = entity
-        method    = method
-        path_part = path_part
-      }
-    }
-  ]...)
-
-  item_method_map = merge([
-    for entity, path_part in local.entity_paths : {
-      for method in local.item_methods : "${entity}:${method}" => {
-        entity    = entity
-        method    = method
-        path_part = path_part
-      }
-    }
-  ]...)
 }
 
 resource "aws_dynamodb_table" "student_tracker" {
@@ -211,64 +179,50 @@ resource "aws_lambda_event_source_mapping" "write_events" {
   enabled          = true
 }
 
-resource "aws_api_gateway_rest_api" "api" {
-  name = "${var.project_name}-rest-api"
+resource "aws_apigatewayv2_api" "http_api" {
+  name          = "${var.project_name}-http-api"
+  protocol_type = "HTTP"
+  cors_configuration {
+    allow_headers = ["content-type"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_origins = ["*"]
+  }
 }
 
-resource "aws_api_gateway_resource" "entity" {
-  for_each = local.entity_paths
+resource "aws_apigatewayv2_integration" "lambda" {
+  for_each = {
+    students = aws_lambda_function.handlers["students"].invoke_arn
+    programs = aws_lambda_function.handlers["programs"].invoke_arn
+    courses  = aws_lambda_function.handlers["courses"].invoke_arn
+    grades   = aws_lambda_function.handlers["grades"].invoke_arn
+  }
 
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
-  path_part   = each.value
+  api_id                 = aws_apigatewayv2_api.http_api.id
+  integration_type       = "AWS_PROXY"
+  integration_method     = "POST"
+  integration_uri        = each.value
+  payload_format_version = "1.0"
 }
 
-resource "aws_api_gateway_resource" "entity_id" {
-  for_each = local.entity_paths
-
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  parent_id   = aws_api_gateway_resource.entity[each.key].id
-  path_part   = "{id}"
+locals {
+  route_map = {
+    "ANY /students"       = "students"
+    "ANY /students/{id}"  = "students"
+    "ANY /programs"       = "programs"
+    "ANY /programs/{id}"  = "programs"
+    "ANY /courses"        = "courses"
+    "ANY /courses/{id}"   = "courses"
+    "ANY /grades"         = "grades"
+    "ANY /grades/{id}"    = "grades"
+  }
 }
 
-resource "aws_api_gateway_method" "collection" {
-  for_each = local.collection_method_map
+resource "aws_apigatewayv2_route" "routes" {
+  for_each = local.route_map
 
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.entity[each.value.entity].id
-  http_method   = each.value.method
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "collection" {
-  for_each = local.collection_method_map
-
-  rest_api_id             = aws_api_gateway_rest_api.api.id
-  resource_id             = aws_api_gateway_resource.entity[each.value.entity].id
-  http_method             = aws_api_gateway_method.collection[each.key].http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.handlers[each.value.entity].invoke_arn}/invocations"
-}
-
-resource "aws_api_gateway_method" "item" {
-  for_each = local.item_method_map
-
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.entity_id[each.value.entity].id
-  http_method   = each.value.method
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "item" {
-  for_each = local.item_method_map
-
-  rest_api_id             = aws_api_gateway_rest_api.api.id
-  resource_id             = aws_api_gateway_resource.entity_id[each.value.entity].id
-  http_method             = aws_api_gateway_method.item[each.key].http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.handlers[each.value.entity].invoke_arn}/invocations"
+  api_id    = aws_apigatewayv2_api.http_api.id
+  route_key = each.key
+  target    = "integrations/${aws_apigatewayv2_integration.lambda[each.value].id}"
 }
 
 resource "aws_lambda_permission" "api_invoke" {
@@ -283,27 +237,11 @@ resource "aws_lambda_permission" "api_invoke" {
   action        = "lambda:InvokeFunction"
   function_name = each.value
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }
 
-resource "aws_api_gateway_deployment" "deployment" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-
-  depends_on = [
-    aws_api_gateway_integration.collection,
-    aws_api_gateway_integration.item
-  ]
-
-  triggers = {
-    redeploy_hash = sha1(jsonencode({
-      collection = local.collection_method_map
-      item       = local.item_method_map
-    }))
-  }
-}
-
-resource "aws_api_gateway_stage" "stage" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  deployment_id = aws_api_gateway_deployment.deployment.id
-  stage_name    = var.stage_name
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.http_api.id
+  name        = var.stage_name
+  auto_deploy = true
 }

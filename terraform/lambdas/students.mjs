@@ -23,7 +23,6 @@ const corsHeaders = {
 const getMethod = (event) => event.httpMethod || event.requestContext?.http?.method;
 
 const getPath = (event) => {
-  if (event.resource) return event.resource;
   const rawPath = event.path || event.requestContext?.http?.path || '';
   return rawPath.replace(/^\/students\/[^/]+$/, '/students/{id}');
 };
@@ -35,6 +34,8 @@ const getRouteKey = (event) => {
 
   return `${getMethod(event)} ${getPath(event)}`;
 };
+const getMethod = (event) => event.httpMethod || event.requestContext?.http?.method;
+const getPath = (event) => event.resource || event.requestContext?.http?.path || event.path;
 
 const parseBody = (event) => {
   try {
@@ -44,9 +45,9 @@ const parseBody = (event) => {
   }
 };
 
-const json = (statusCode, body = {}) => ({
+const json = (statusCode, body) => ({
   statusCode,
-  headers: corsHeaders,
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body)
 });
 
@@ -58,8 +59,6 @@ const queueWrite = async (eventType, payload) => {
     })
   );
 };
-
-const preflight = async () => json(204);
 
 const createStudent = async (event) => {
   const body = parseBody(event);
@@ -126,8 +125,6 @@ const deleteStudent = async (event) => {
 };
 
 const routes = {
-  'OPTIONS /students': preflight,
-  'OPTIONS /students/{id}': preflight,
   'POST /students': createStudent,
   'GET /students': listStudents,
   'GET /students/{id}': getStudent,
@@ -136,7 +133,9 @@ const routes = {
 };
 
 export const handler = async (event) => {
-  const routeKey = getRouteKey(event);
+  const method = getMethod(event);
+  const path = getPath(event);
+  const routeKey = `${method} ${path}`;
   const route = routes[routeKey];
 
   if (!route) return json(404, { message: 'Route not found', routeKey });
